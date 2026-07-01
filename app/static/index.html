@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>13th Man — Multi-Agent OS</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <h1>13th Man</h1>
+    <span class="subtitle">Multi-Agent Cognitive Operating System</span>
+  </header>
+
+  <div class="layout">
+    <!-- Left sidebar: Agents -->
+    <div class="sidebar">
+      <h3>Specialist Agents</h3>
+      <div id="agents-list"></div>
+
+      <h3 style="margin-top: 20px;">Task History</h3>
+      <div id="history-list"></div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main">
+      <div class="input-area">
+        <textarea id="task-input" placeholder="Describe your task... Jarvis will route it to the right specialists and the 13th Man will verify the result."></textarea>
+        <button id="submit-btn" onclick="submitTask()">Send</button>
+      </div>
+
+      <div id="response-area">
+        <div class="empty-state">
+          <h2>Ready to work</h2>
+          <p>
+            Submit a task and watch the multi-agent system in action.
+            Jarvis will orchestrate specialists, and the 13th Man will
+            challenge every conclusion before it reaches you.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel: Details -->
+    <div class="panel">
+      <div class="panel-section">
+        <h3>13th Man Verification</h3>
+        <div id="verification-panel">
+          <p style="font-size: 12px; color: var(--text-dim);">No verification yet</p>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Execution Trace</h3>
+        <div id="trace-panel">
+          <p style="font-size: 12px; color: var(--text-dim);">No trace yet</p>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Pending Approvals</h3>
+        <div id="approvals-panel">
+          <p style="font-size: 12px; color: var(--text-dim);">None</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
