@@ -95,8 +95,14 @@ async function submitTask() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Request failed');
+      let errMsg = 'Request failed';
+      try {
+        const err = await res.json();
+        errMsg = err.detail || errMsg;
+      } catch (_) {
+        errMsg = await res.text() || errMsg;
+      }
+      throw new Error(errMsg);
     }
 
     const data = await res.json();

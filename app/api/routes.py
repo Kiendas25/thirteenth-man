@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import traceback
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.agents.orchestrator import Orchestrator
@@ -27,7 +29,21 @@ orchestrator = Orchestrator()
 @router.post("/api/tasks")
 async def create_task(req: TaskRequest):
     """Submit a task to the multi-agent system."""
-    response = await orchestrator.process(req)
+    try:
+        response = await orchestrator.process(req)
+    except Exception as exc:
+        log.error("Task processing failed: %s", exc)
+        log.debug(traceback.format_exc())
+        msg = str(exc)
+        if "api_key" in msg.lower() or "auth" in msg.lower():
+            msg = (
+                "OpenAI API key not configured or invalid. "
+                "Edit your .env file and set OPENAI_API_KEY=sk-your-key"
+            )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": msg},
+        )
 
     # Persist and trace
     log_trace(response)
