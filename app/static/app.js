@@ -1,64 +1,238 @@
-// 13th Man — Frontend Application
-
 const API = '';
+let authToken = localStorage.getItem('13m_token');
+let currentTaskId = null;
+let inputMode = 'text';
 
 // -------------------------------------------------------------------------
-// Initialisation
+// Init
 // -------------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check auth
+  if (authToken) {
+    const res = await fetch(`${API}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const data = await res.json();
+    if (data.authenticated) {
+      showLoggedIn(data.username);
+    } else {
+      authToken = null;
+      localStorage.removeItem('13m_token');
+      showAuthModal();
+    }
+  } else {
+    showAuthModal();
+  }
   loadAgents();
   loadHistory();
-
-  document.getElementById('task-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submitTask();
-    }
-  });
+  loadSettings();
 });
 
 // -------------------------------------------------------------------------
-// Load agents sidebar
+// Auth
+// -------------------------------------------------------------------------
+
+let authMode = 'login';
+
+function showAuthModal() {
+  document.getElementById('auth-modal').style.display = 'flex';
+}
+
+function hideAuthModal() {
+  document.getElementById('auth-modal').style.display = 'none';
+}
+
+function authToggle() {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  document.getElementById('auth-title').textContent =
+    authMode === 'login' ? 'Login' : 'Create Account';
+  document.getElementById('auth-submit-btn').textContent =
+    authMode === 'login' ? 'Login' : 'Register';
+  document.getElementById('auth-toggle-text').textContent =
+    authMode === 'login' ? 'Create Account' : 'Back to Login';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+async function authSubmit() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+
+  if (!username || !password) {
+    errEl.textContent = 'Fill in both fields';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+  try {
+    const res = await fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errEl.textContent = data.detail || 'Error';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    if (authMode === 'register') {
+      // Auto-login after register
+      authMode = 'login';
+      await authSubmit();
+      return;
+    }
+
+    authToken = data.access_token;
+    localStorage.setItem('13m_token', authToken);
+    showLoggedIn(data.username);
+    hideAuthModal();
+  } catch (e) {
+    errEl.textContent = 'Connection error';
+    errEl.style.display = 'block';
+  }
+}
+
+function authSkip() {
+  hideAuthModal();
+}
+
+function showLoggedIn(username) {
+  document.getElementById('user-info').textContent = username;
+  document.getElementById('logout-btn').style.display = 'inline-block';
+}
+
+function logout() {
+  authToken = null;
+  localStorage.removeItem('13m_token');
+  document.getElementById('user-info').textContent = '';
+  document.getElementById('logout-btn').style.display = 'none';
+  showAuthModal();
+}
+
+function authHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+  return h;
+}
+
+// -------------------------------------------------------------------------
+// Input mode tabs
+// -------------------------------------------------------------------------
+
+function setInputMode(mode) {
+  inputMode = mode;
+  document.getElementById('tab-text').classList.toggle('active', mode === 'text');
+  document.getElementById('tab-code').classList.toggle('active', mode === 'code');
+  document.getElementById('code-input-area').style.display =
+    mode === 'code' ? 'flex' : 'none';
+  document.getElementById('task-input').placeholder =
+    mode === 'code'
+      ? 'Describe what to analyse in this code (or leave blank for full review)...'
+      : 'Describe your task... Jarvis will route it to the right specialists and the 13th Man will verify the result.';
+}
+
+// -------------------------------------------------------------------------
+// Load agents
 // -------------------------------------------------------------------------
 
 async function loadAgents() {
   try {
     const res = await fetch(`${API}/api/agents`);
     const agents = await res.json();
-    const container = document.getElementById('agents-list');
-    container.innerHTML = agents.map(a => `
+    const list = document.getElementById('agents-list');
+    list.innerHTML = agents
+      .map(
+        (a) => `
       <div class="agent-card" id="agent-${a.id}">
-        <div class="name">${a.name}</div>
-        <div class="role">${a.role}</div>
+        <div class="name">${escapeHtml(a.name)}</div>
+        <div class="role">${escapeHtml(a.role)}</div>
       </div>
-    `).join('');
-  } catch (err) {
-    console.error('Failed to load agents:', err);
+    `,
+      )
+      .join('');
+  } catch (e) {
+    console.error('Failed to load agents', e);
   }
 }
 
 // -------------------------------------------------------------------------
-// Load task history
+// Load settings
+// -------------------------------------------------------------------------
+
+async function loadSettings() {
+  try {
+    const res = await fetch(`${API}/api/settings`);
+    const s = await res.json();
+    document.getElementById('settings-panel').innerHTML = `
+      <div class="setting-row">
+        <span class="setting-label">Provider</span>
+        <span class="setting-value">${escapeHtml(s.llm_provider)}</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Model</span>
+        <span class="setting-value">${escapeHtml(s.llm_model)}</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">HITL</span>
+        <span class="setting-value">${s.require_human_approval ? 'On' : 'Off'}</span>
+      </div>
+    `;
+  } catch (e) {
+    console.error('Failed to load settings', e);
+  }
+}
+
+// -------------------------------------------------------------------------
+// Load history
 // -------------------------------------------------------------------------
 
 async function loadHistory() {
   try {
     const res = await fetch(`${API}/api/tasks`);
     const tasks = await res.json();
-    const container = document.getElementById('history-list');
-    if (tasks.length === 0) {
-      container.innerHTML = '<p style="font-size: 12px; color: var(--text-dim);">No tasks yet</p>';
+    const list = document.getElementById('history-list');
+    if (!tasks.length) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--text-dim);">No tasks yet</p>';
       return;
     }
-    container.innerHTML = tasks.map(t => `
-      <div class="history-item" onclick="loadTaskDetail('${t.id}')">
-        <div class="task-text">${escapeHtml(t.final_answer?.substring(0, 60) || t.id)}</div>
-        <div class="meta">${t.status} &middot; ${new Date(t.created_at).toLocaleString()}</div>
+    list.innerHTML = tasks
+      .map(
+        (t) => `
+      <div class="history-item" onclick="loadTask('${t.id}')">
+        <div class="task-text">${escapeHtml(t.final_answer?.substring(0, 80) || t.id)}</div>
+        <div class="meta">${t.status} - ${t.created_at}</div>
       </div>
-    `).join('');
-  } catch (err) {
-    console.error('Failed to load history:', err);
+    `,
+      )
+      .join('');
+  } catch (e) {
+    console.error('Failed to load history', e);
+  }
+}
+
+// -------------------------------------------------------------------------
+// Load previous task
+// -------------------------------------------------------------------------
+
+async function loadTask(taskId) {
+  try {
+    const res = await fetch(`${API}/api/tasks/${taskId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    currentTaskId = data.task_id;
+    renderResponse(data);
+    renderVerification(data.verification);
+    renderTrace(data.trace);
+    renderApprovals(data.approval);
+    highlightAgents(data.specialists_used);
+    showExportSection();
+  } catch (e) {
+    console.error('Failed to load task', e);
   }
 }
 
@@ -69,13 +243,26 @@ async function loadHistory() {
 async function submitTask() {
   const input = document.getElementById('task-input');
   const btn = document.getElementById('submit-btn');
-  const content = input.value.trim();
+  let content = input.value.trim();
+
+  // Code review mode
+  if (inputMode === 'code') {
+    const code = document.getElementById('code-input').value.trim();
+    const lang = document.getElementById('code-language').value;
+    if (!code) {
+      alert('Please paste code to review');
+      return;
+    }
+    const langLabel = lang || 'code';
+    const instruction = content || 'Perform a comprehensive code review. Find bugs, security vulnerabilities, performance issues, and suggest improvements.';
+    content = `${instruction}\n\n\`\`\`${langLabel}\n${code}\n\`\`\``;
+  }
+
   if (!content) return;
 
   btn.disabled = true;
   input.disabled = true;
 
-  // Show loading
   const responseArea = document.getElementById('response-area');
   responseArea.innerHTML = `
     <div class="loading">
@@ -84,13 +271,12 @@ async function submitTask() {
     </div>
   `;
 
-  // Clear highlights
-  document.querySelectorAll('.agent-card.active').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.agent-card.active').forEach((c) => c.classList.remove('active'));
 
   try {
     const res = await fetch(`${API}/api/tasks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ content }),
     });
 
@@ -100,19 +286,20 @@ async function submitTask() {
         const err = await res.json();
         errMsg = err.detail || errMsg;
       } catch (_) {
-        errMsg = await res.text() || errMsg;
+        errMsg = (await res.text()) || errMsg;
       }
       throw new Error(errMsg);
     }
 
     const data = await res.json();
+    currentTaskId = data.task_id;
     renderResponse(data);
     renderVerification(data.verification);
     renderTrace(data.trace);
     renderApprovals(data.approval);
     highlightAgents(data.specialists_used);
     loadHistory();
-
+    showExportSection();
   } catch (err) {
     responseArea.innerHTML = `
       <div class="response-card">
@@ -123,84 +310,124 @@ async function submitTask() {
   } finally {
     btn.disabled = false;
     input.disabled = false;
-    input.value = '';
-    input.focus();
   }
 }
 
 // -------------------------------------------------------------------------
-// Render response
+// Render response with markdown
 // -------------------------------------------------------------------------
+
+function simpleMarkdown(text) {
+  if (!text) return '';
+  let html = escapeHtml(text);
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Unordered lists
+  html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Paragraphs (double newline)
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  // Single newlines to <br> (but not inside pre/code)
+  html = html.replace(/\n/g, '<br>');
+  // Clean up empty tags
+  html = html.replace(/<p><\/p>/g, '');
+  html = html.replace(/<p><br>/g, '<p>');
+  return html;
+}
 
 function renderResponse(data) {
   const responseArea = document.getElementById('response-area');
+  const statusBadge = data.status === 'completed'
+    ? '<span class="badge passed">Completed</span>'
+    : `<span class="badge pending">${escapeHtml(data.status)}</span>`;
+  const issuesBadge = data.verification && !data.verification.passed
+    ? '<span class="badge failed">Issues Found</span>'
+    : data.verification
+      ? '<span class="badge passed">Verified</span>'
+      : '';
 
   let specialistsHtml = '';
-  if (data.specialist_results && data.specialist_results.length > 0) {
+  if (data.specialist_results && data.specialist_results.length) {
     specialistsHtml = `
-      <div style="margin-top: 16px;">
-        <h3 style="font-size: 13px; margin-bottom: 8px;">Specialist Outputs</h3>
-        ${data.specialist_results.map(r => `
-          <div class="specialist-result">
+      <details style="margin-top: 16px;">
+        <summary style="cursor: pointer; font-weight: 600; font-size: 13px; color: var(--accent);">
+          Specialist Outputs (${data.specialist_results.length})
+        </summary>
+        ${data.specialist_results
+          .map(
+            (r) => `
+          <div class="specialist-result" style="margin-top: 8px;">
             <div class="name">${escapeHtml(r.agent_name)}</div>
-            <div class="content">${escapeHtml(r.content)}</div>
+            <div class="content">${simpleMarkdown(r.content)}</div>
           </div>
-        `).join('')}
-      </div>
+        `,
+          )
+          .join('')}
+      </details>
     `;
   }
 
   responseArea.innerHTML = `
     <div class="response-card">
-      <h3>
-        Final Answer
-        <span class="badge ${data.status}">${data.status}</span>
-        ${data.verification ? `<span class="badge ${data.verification.passed ? 'passed' : 'failed'}">${data.verification.passed ? 'Verified' : 'Issues Found'}</span>` : ''}
-      </h3>
-      <div class="answer">${escapeHtml(data.final_answer)}</div>
+      <h3>Final Answer ${statusBadge} ${issuesBadge}</h3>
+      <div class="answer">${simpleMarkdown(data.final_answer)}</div>
       ${specialistsHtml}
     </div>
   `;
 }
 
 // -------------------------------------------------------------------------
-// Render verification panel
+// Verification
 // -------------------------------------------------------------------------
 
 function renderVerification(v) {
   const panel = document.getElementById('verification-panel');
   if (!v) {
-    panel.innerHTML = '<p style="font-size: 12px; color: var(--text-dim);">No verification</p>';
+    panel.innerHTML = '<p style="font-size: 12px; color: var(--text-dim);">No verification yet</p>';
     return;
   }
+  const badge = v.passed
+    ? '<span class="badge passed">Passed</span>'
+    : '<span class="badge failed">Failed</span>';
+  const riskBadge = `<span class="badge ${v.risk_level}">${v.risk_level}</span>`;
 
   let issuesHtml = '';
-  if (v.issues && v.issues.length > 0) {
+  if (v.issues && v.issues.length) {
     issuesHtml = `
-      <div class="issues">
-        <strong>Issues:</strong>
-        <ul>${v.issues.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+      <div class="issues" style="margin-top: 8px;">
+        <strong style="font-size: 12px;">Issues:</strong>
+        <ul>${v.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
       </div>
     `;
   }
 
   let recsHtml = '';
-  if (v.recommendations && v.recommendations.length > 0) {
+  if (v.recommendations && v.recommendations.length) {
     recsHtml = `
       <div class="issues" style="margin-top: 8px;">
-        <strong>Recommendations:</strong>
-        <ul>${v.recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+        <strong style="font-size: 12px;">Recommendations:</strong>
+        <ul>${v.recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
       </div>
     `;
   }
 
   panel.innerHTML = `
     <div class="verification">
-      <div class="header">
-        <span class="badge ${v.passed ? 'passed' : 'failed'}">${v.passed ? 'PASSED' : 'FAILED'}</span>
-        <span class="badge ${v.risk_level}">${v.risk_level}</span>
-      </div>
-      <p style="font-size: 12px; margin-top: 8px;">${escapeHtml(v.reasoning)}</p>
+      <div class="header">${badge} ${riskBadge}</div>
+      <p style="font-size: 12px; line-height: 1.5;">${escapeHtml(v.reasoning || '')}</p>
       ${issuesHtml}
       ${recsHtml}
     </div>
@@ -208,27 +435,30 @@ function renderVerification(v) {
 }
 
 // -------------------------------------------------------------------------
-// Render trace
+// Trace
 // -------------------------------------------------------------------------
 
 function renderTrace(trace) {
   const panel = document.getElementById('trace-panel');
-  if (!trace || trace.length === 0) {
-    panel.innerHTML = '<p style="font-size: 12px; color: var(--text-dim);">No trace</p>';
+  if (!trace || !trace.length) {
+    panel.innerHTML = '<p style="font-size: 12px; color: var(--text-dim);">No trace yet</p>';
     return;
   }
-
-  panel.innerHTML = trace.map(t => `
+  panel.innerHTML = trace
+    .map(
+      (t) => `
     <div class="trace-entry">
       <span class="agent-name">${escapeHtml(t.agent)}</span>
       <span class="duration">${t.duration_ms}ms</span>
       <div class="detail">${escapeHtml(t.action)}: ${escapeHtml(t.detail)}</div>
     </div>
-  `).join('');
+  `,
+    )
+    .join('');
 }
 
 // -------------------------------------------------------------------------
-// Render approvals
+// Approvals
 // -------------------------------------------------------------------------
 
 function renderApprovals(approval) {
@@ -237,13 +467,12 @@ function renderApprovals(approval) {
     panel.innerHTML = '<p style="font-size: 12px; color: var(--text-dim);">None</p>';
     return;
   }
-
   panel.innerHTML = `
     <div class="approval-card">
-      <div style="font-size: 13px; font-weight: 600;">${escapeHtml(approval.action_description)}</div>
-      <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">
+      <p style="font-size: 12px;">${escapeHtml(approval.reason)}</p>
+      <p style="font-size: 11px; color: var(--text-dim); margin-top:4px;">
         Risk: <span class="badge ${approval.risk_level}">${approval.risk_level}</span>
-      </div>
+      </p>
       <div class="actions">
         <button class="btn-approve" onclick="resolveApproval('${approval.id}', true)">Approve</button>
         <button class="btn-reject" onclick="resolveApproval('${approval.id}', false)">Reject</button>
@@ -252,21 +481,16 @@ function renderApprovals(approval) {
   `;
 }
 
-// -------------------------------------------------------------------------
-// Resolve approval
-// -------------------------------------------------------------------------
-
 async function resolveApproval(id, approved) {
   try {
     await fetch(`${API}/api/approvals/${id}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ approved }),
     });
-    const panel = document.getElementById('approvals-panel');
-    panel.innerHTML = `<p style="font-size: 12px; color: ${approved ? 'var(--green)' : 'var(--red)'};">${approved ? 'Approved' : 'Rejected'}</p>`;
-  } catch (err) {
-    console.error('Approval error:', err);
+    renderApprovals(null);
+  } catch (e) {
+    console.error('Approval error', e);
   }
 }
 
@@ -274,32 +498,26 @@ async function resolveApproval(id, approved) {
 // Highlight active agents
 // -------------------------------------------------------------------------
 
-function highlightAgents(ids) {
-  document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
-  if (!ids) return;
-  ids.forEach(id => {
-    const el = document.getElementById(`agent-${id}`);
-    if (el) el.classList.add('active');
+function highlightAgents(used) {
+  document.querySelectorAll('.agent-card.active').forEach((c) => c.classList.remove('active'));
+  if (!used) return;
+  used.forEach((id) => {
+    const card = document.getElementById(`agent-${id}`);
+    if (card) card.classList.add('active');
   });
 }
 
 // -------------------------------------------------------------------------
-// Load task detail from history
+// Export
 // -------------------------------------------------------------------------
 
-async function loadTaskDetail(taskId) {
-  try {
-    const res = await fetch(`${API}/api/tasks/${taskId}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    renderResponse(data);
-    renderVerification(data.verification);
-    renderTrace(data.trace);
-    renderApprovals(data.approval);
-    highlightAgents(data.specialists_used);
-  } catch (err) {
-    console.error('Failed to load task:', err);
-  }
+function showExportSection() {
+  document.getElementById('export-section').style.display = 'block';
+}
+
+function exportResult(format) {
+  if (!currentTaskId) return;
+  window.open(`${API}/api/tasks/${currentTaskId}/export/${format}`, '_blank');
 }
 
 // -------------------------------------------------------------------------
@@ -308,7 +526,7 @@ async function loadTaskDetail(taskId) {
 
 function escapeHtml(text) {
   if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
 }

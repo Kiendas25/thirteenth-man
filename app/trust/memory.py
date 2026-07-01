@@ -101,16 +101,24 @@ async def save_memory(entry: MemoryEntry) -> None:
         await db.commit()
 
 
-async def get_recent_tasks(limit: int = 20) -> list[dict]:
-    """Retrieve recent task summaries."""
+async def get_recent_tasks(
+    limit: int = 20,
+    status_filter: str | None = None,
+) -> list[dict]:
+    """Retrieve recent task summaries with optional status filter."""
     async with aiosqlite.connect(_DB) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
+        query = (
             "SELECT id, status, final_answer, specialists_used, "
-            "verification_passed, created_at "
-            "FROM tasks ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            "verification_passed, created_at FROM tasks"
         )
+        params: list = []
+        if status_filter:
+            query += " WHERE status = ?"
+            params.append(status_filter)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        cursor = await db.execute(query, params)
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 

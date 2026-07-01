@@ -7,11 +7,33 @@
   <link rel="stylesheet" href="/static/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- Auth Modal -->
+  <div id="auth-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h2 id="auth-title">Login</h2>
+      <input type="text" id="auth-username" placeholder="Username" autocomplete="username">
+      <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password">
+      <div class="modal-actions">
+        <button id="auth-submit-btn" onclick="authSubmit()">Login</button>
+        <button class="btn-secondary" onclick="authToggle()">
+          <span id="auth-toggle-text">Create Account</span>
+        </button>
+      </div>
+      <button class="btn-skip" onclick="authSkip()">Continue without login</button>
+      <p id="auth-error" style="color:var(--red);font-size:12px;margin-top:8px;display:none;"></p>
+    </div>
+  </div>
+
   <header>
     <h1>13th Man</h1>
     <span class="subtitle">Multi-Agent Cognitive Operating System</span>
+    <div class="header-right">
+      <span id="user-info" style="font-size:12px;color:var(--text-dim);"></span>
+      <button id="logout-btn" class="btn-small" onclick="logout()" style="display:none;">Logout</button>
+    </div>
   </header>
 
   <div class="layout">
@@ -20,14 +42,40 @@
       <h3>Specialist Agents</h3>
       <div id="agents-list"></div>
 
+      <h3 style="margin-top: 20px;">Settings</h3>
+      <div id="settings-panel" class="settings-panel"></div>
+
       <h3 style="margin-top: 20px;">Task History</h3>
       <div id="history-list"></div>
     </div>
 
     <!-- Main content -->
     <div class="main">
+      <!-- Input mode tabs -->
+      <div class="input-tabs">
+        <button class="tab active" onclick="setInputMode('text')" id="tab-text">Text Query</button>
+        <button class="tab" onclick="setInputMode('code')" id="tab-code">Code Review</button>
+      </div>
+
       <div class="input-area">
         <textarea id="task-input" placeholder="Describe your task... Jarvis will route it to the right specialists and the 13th Man will verify the result."></textarea>
+        <div id="code-input-area" style="display:none;">
+          <select id="code-language">
+            <option value="">Language (auto-detect)</option>
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="java">Java</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+            <option value="c">C/C++</option>
+            <option value="csharp">C#</option>
+            <option value="php">PHP</option>
+            <option value="ruby">Ruby</option>
+            <option value="solidity">Solidity</option>
+          </select>
+          <textarea id="code-input" class="code-textarea" placeholder="Paste your code here for analysis..."></textarea>
+        </div>
         <button id="submit-btn" onclick="submitTask()">Send</button>
       </div>
 
@@ -63,6 +111,14 @@
         <h3>Pending Approvals</h3>
         <div id="approvals-panel">
           <p style="font-size: 12px; color: var(--text-dim);">None</p>
+        </div>
+      </div>
+
+      <div class="panel-section" id="export-section" style="display:none;">
+        <h3>Export</h3>
+        <div class="export-buttons">
+          <button class="btn-export" onclick="exportResult('markdown')">Download .md</button>
+          <button class="btn-export" onclick="exportResult('html')">Download .html</button>
         </div>
       </div>
     </div>

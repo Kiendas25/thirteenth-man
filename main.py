@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.auth import init_auth_db
 from app.config import settings
 from app.trust.memory import init_db
 
@@ -26,6 +27,7 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     await init_db()
+    await init_auth_db()
     yield
 
 
