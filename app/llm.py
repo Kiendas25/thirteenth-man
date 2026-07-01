@@ -18,7 +18,13 @@ _client: AsyncOpenAI | None = None
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key)
+        key = settings.openai_api_key
+        if not key or key == "sk-your-key-here":
+            raise RuntimeError(
+                "OPENAI_API_KEY not configured. "
+                "Edit your .env file and set a valid key."
+            )
+        _client = AsyncOpenAI(api_key=key)
     return _client
 
 
@@ -46,7 +52,11 @@ async def chat(
         kwargs["response_format"] = response_format
 
     log.debug("LLM request: model=%s tokens=%d", kwargs["model"], max_tokens)
-    resp = await client.chat.completions.create(**kwargs)
+    try:
+        resp = await client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        log.error("OpenAI API error: %s", exc)
+        raise RuntimeError(f"OpenAI API error: {exc}") from exc
     content = resp.choices[0].message.content or ""
     log.debug("LLM response length: %d chars", len(content))
     return content
