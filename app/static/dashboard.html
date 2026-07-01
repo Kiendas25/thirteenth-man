@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>13th Man — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface-2: #1a1a26;
+      --border: #2a2a3a;
+      --text: #e0e0e8;
+      --text-dim: #8888a0;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.3);
+      --green: #22c55e;
+      --red: #ef4444;
+      --orange: #f59e0b;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* Nav */
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    nav h1 {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    nav .subtitle { color: var(--text-dim); font-size: 13px; }
+
+    nav .nav-links {
+      margin-left: auto;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    nav a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    nav a:hover { color: var(--accent); }
+    nav a.active { color: var(--accent); }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 800;
+    }
+
+    .stat-card .sub {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .color-accent { color: var(--accent); }
+    .color-green { color: var(--green); }
+    .color-red { color: var(--red); }
+    .color-orange { color: var(--orange); }
+
+    /* Sections grid */
+    .sections-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .section-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .section-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    /* Chart placeholder */
+    .chart-container {
+      width: 100%;
+      height: 200px;
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      padding-top: 8px;
+    }
+
+    .chart-bar {
+      flex: 1;
+      background: linear-gradient(180deg, var(--accent) 0%, rgba(99, 102, 241, 0.3) 100%);
+      border-radius: 4px 4px 0 0;
+      position: relative;
+      min-height: 4px;
+      transition: opacity 0.2s;
+      cursor: default;
+    }
+
+    .chart-bar:hover {
+      opacity: 0.8;
+    }
+
+    .chart-bar .tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+      white-space: nowrap;
+      z-index: 10;
+    }
+
+    .chart-bar:hover .tooltip { display: block; }
+
+    /* Specialist usage */
+    .specialist-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .specialist-bar .name {
+      width: 100px;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .specialist-bar .bar-track {
+      flex: 1;
+      height: 20px;
+      background: var(--surface-2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .specialist-bar .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #a855f7);
+      border-radius: 4px;
+      transition: width 0.6s ease;
+    }
+
+    .specialist-bar .count {
+      width: 40px;
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: right;
+    }
+
+    /* Knowledge list */
+    .knowledge-item {
+      background: var(--surface-2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+
+    .knowledge-item .title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .knowledge-item .content {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      max-height: 60px;
+      overflow: hidden;
+    }
+
+    .knowledge-item .meta {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 6px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .knowledge-item .delete-btn {
+      background: none;
+      border: none;
+      color: var(--red);
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    /* Patterns list */
+    .pattern-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .pattern-item .freq {
+      background: var(--accent);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .pattern-item .type-badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* Custom agents */
+    .agent-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+
+    .agent-item .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .agent-item .name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .agent-item .role {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .agent-item .desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    .agent-item .delete-btn {
+      background: none;
+      border: 1px solid var(--red);
+      color: var(--red);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .agent-item .delete-btn:hover { background: var(--red); color: white; }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus { border-color: var(--accent); }
+
+    .form-group textarea { min-height: 80px; resize: vertical; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-primary:hover { opacity: 0.9; }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-outline:hover { background: var(--accent); color: white; }
+
+    /* Full width section */
+    .full-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .full-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    /* Tab nav */
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+
+    .tab-nav button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-nav button.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .tab-nav button:hover:not(.active) { color: var(--text); border-color: var(--accent); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Empty state */
+    .empty-msg {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+      padding: 24px 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .sections-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <h1>13th Man</h1>
+    <span class="subtitle">Dashboard</span>
+    <div class="nav-links">
+      <a href="/app">App</a>
+      <a href="/dashboard" class="active">Dashboard</a>
+      <a href="/docs" target="_blank">API Docs</a>
+      <a href="/">Home</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Tab navigation -->
+    <div class="tab-nav">
+      <button class="active" onclick="switchTab('overview')">Overview</button>
+      <button onclick="switchTab('knowledge')">Knowledge Base</button>
+      <button onclick="switchTab('agents')">Custom Agents</button>
+      <button onclick="switchTab('patterns')">Learned Patterns</button>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="tab-overview" class="tab-panel active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">Total Tasks</div>
+          <div class="value color-accent" id="stat-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Verified</div>
+          <div class="value color-green" id="stat-passed">—</div>
+          <div class="sub" id="stat-pass-rate"></div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Failed Verification</div>
+          <div class="value color-red" id="stat-failed">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Avg Duration</div>
+          <div class="value color-orange" id="stat-duration">—</div>
+          <div class="sub">per agent call</div>
+        </div>
+      </div>
+
+      <div class="sections-grid">
+        <div class="section-card">
+          <h3>Tasks per Day</h3>
+          <div class="chart-container" id="daily-chart"></div>
+        </div>
+        <div class="section-card">
+          <h3>Most Used Specialists</h3>
+          <div id="specialist-chart"></div>
+        </div>
+      </div>
+
+      <div class="full-section">
+        <h3>Recent Tasks</h3>
+        <div id="recent-tasks"></div>
+      </div>
+    </div>
+
+    <!-- KNOWLEDGE BASE TAB -->
+    <div id="tab-knowledge" class="tab-panel">
+      <div class="sections-grid">
+        <div class="section-card">
+          <h3>Add Knowledge</h3>
+          <div class="form-group">
+            <label>Category</label>
+            <input type="text" id="kb-category" placeholder="e.g. coding-pattern, security-rule, convention">
+          </div>
+          <div class="form-group">
+            <label>Title</label>
+            <input type="text" id="kb-title" placeholder="Short descriptive title">
+          </div>
+          <div class="form-group">
+            <label>Content</label>
+            <textarea id="kb-content" placeholder="The knowledge content..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Tags (comma-separated)</label>
+            <input type="text" id="kb-tags" placeholder="python, security, best-practice">
+          </div>
+          <button class="btn-primary" onclick="addKnowledge()">Save Knowledge</button>
+        </div>
+
+        <div class="section-card">
+          <h3>Knowledge Entries</h3>
+          <div style="margin-bottom:12px;">
+            <input type="text" id="kb-search" placeholder="Search knowledge..." style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;" oninput="searchKnowledge()">
+          </div>
+          <div id="knowledge-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM AGENTS TAB -->
+    <div id="tab-agents" class="tab-panel">
+      <div class="sections-grid">
+        <div class="section-card">
+          <h3>Create Custom Agent</h3>
+          <div class="form-group">
+            <label>Agent ID (unique, lowercase)</label>
+            <input type="text" id="ca-id" placeholder="e.g. devops, legal-review, ux-audit">
+          </div>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="ca-name" placeholder="e.g. DevOps Engineer">
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <input type="text" id="ca-role" placeholder="e.g. Infrastructure & Deployment Specialist">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="ca-desc" placeholder="What this agent does..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Capabilities (comma-separated)</label>
+            <input type="text" id="ca-caps" placeholder="CI/CD pipelines, Docker, Kubernetes, monitoring">
+          </div>
+          <div class="form-group">
+            <label>System Prompt</label>
+            <textarea id="ca-prompt" placeholder="You are a DevOps specialist. Your role is to..." style="min-height:120px;"></textarea>
+          </div>
+          <button class="btn-primary" onclick="createAgent()">Create Agent</button>
+        </div>
+
+        <div class="section-card">
+          <h3>Your Custom Agents</h3>
+          <div id="agents-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEARNED PATTERNS TAB -->
+    <div id="tab-patterns" class="tab-panel">
+      <div class="full-section">
+        <h3>Learned Patterns</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px;">
+          Patterns are automatically learned from your analyses. Higher frequency means the pattern appears more often in your work.
+        </p>
+        <div id="patterns-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+
+    function getToken() {
+      return localStorage.getItem('13m_token');
+    }
+
+    function authHeaders() {
+      const h = { 'Content-Type': 'application/json' };
+      const t = getToken();
+      if (t) h['Authorization'] = `Bearer ${t}`;
+      return h;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const d = document.createElement('div');
+      d.textContent = text;
+      return d.innerHTML;
+    }
+
+    // -----------------------------------------------------------------------
+    // Tabs
+    // -----------------------------------------------------------------------
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      event.target.classList.add('active');
+
+      if (name === 'knowledge') loadKnowledge();
+      if (name === 'agents') loadAgents();
+      if (name === 'patterns') loadPatterns();
+    }
+
+    // -----------------------------------------------------------------------
+    // Overview — load analytics
+    // -----------------------------------------------------------------------
+
+    async function loadAnalytics() {
+      try {
+        const res = await fetch(`${API}/api/dashboard/analytics`, { headers: authHeaders() });
+        const d = await res.json();
+
+        document.getElementById('stat-total').textContent = d.total_tasks;
+        document.getElementById('stat-passed').textContent = d.verification_passed;
+        document.getElementById('stat-failed').textContent = d.verification_failed;
+
+        const totalV = d.verification_passed + d.verification_failed;
+        if (totalV > 0) {
+          const rate = Math.round((d.verification_passed / totalV) * 100);
+          document.getElementById('stat-pass-rate').textContent = `${rate}% pass rate`;
+        }
+
+        const avgMs = d.avg_duration_ms;
+        if (avgMs > 1000) {
+          document.getElementById('stat-duration').textContent = `${(avgMs / 1000).toFixed(1)}s`;
+        } else {
+          document.getElementById('stat-duration').textContent = `${avgMs}ms`;
+        }
+
+        // Daily chart
+        renderDailyChart(d.daily_tasks);
+        // Specialist chart
+        renderSpecialistChart(d.top_specialists);
+      } catch (e) {
+        console.error('Analytics error', e);
+      }
+    }
+
+    function renderDailyChart(data) {
+      const el = document.getElementById('daily-chart');
+      if (!data || !data.length) {
+        el.innerHTML = '<p class="empty-msg">No data yet</p>';
+        return;
+      }
+      const max = Math.max(...data.map(d => d.count), 1);
+      // Reverse to show chronological order
+      const sorted = [...data].reverse();
+      el.innerHTML = sorted.map(d => {
+        const h = Math.max(4, (d.count / max) * 180);
+        return `<div class="chart-bar" style="height:${h}px;">
+          <div class="tooltip">${d.date}: ${d.count} task${d.count !== 1 ? 's' : ''}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderSpecialistChart(data) {
+      const el = document.getElementById('specialist-chart');
+      if (!data || !data.length) {
+        el.innerHTML = '<p class="empty-msg">No data yet</p>';
+        return;
+      }
+      const max = Math.max(...data.map(d => d.count), 1);
+      el.innerHTML = data.map(d => {
+        const pct = Math.max(5, (d.count / max) * 100);
+        return `<div class="specialist-bar">
+          <div class="name">${escapeHtml(d.name)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="count">${d.count}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // Recent tasks
+    async function loadRecentTasks() {
+      try {
+        const res = await fetch(`${API}/api/tasks?limit=10`, { headers: authHeaders() });
+        const tasks = await res.json();
+        const el = document.getElementById('recent-tasks');
+        if (!tasks.length) {
+          el.innerHTML = '<p class="empty-msg">No tasks yet. Use the app to run your first analysis!</p>';
+          return;
+        }
+        el.innerHTML = `
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <tr style="border-bottom:1px solid var(--border);">
+              <th style="text-align:left;padding:8px;color:var(--text-dim);">ID</th>
+              <th style="text-align:left;padding:8px;color:var(--text-dim);">Status</th>
+              <th style="text-align:left;padding:8px;color:var(--text-dim);">Verification</th>
+              <th style="text-align:left;padding:8px;color:var(--text-dim);">Specialists</th>
+              <th style="text-align:left;padding:8px;color:var(--text-dim);">Date</th>
+            </tr>
+            ${tasks.map(t => {
+              const vBadge = t.verification_passed === 1
+                ? '<span style="color:var(--green);">Passed</span>'
+                : t.verification_passed === 0
+                  ? '<span style="color:var(--red);">Failed</span>'
+                  : '<span style="color:var(--text-dim);">—</span>';
+              let specs = '—';
+              try { specs = JSON.parse(t.specialists_used).join(', '); } catch(_) {}
+              return `<tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px;"><a href="/app" style="color:var(--accent);text-decoration:none;">${t.id}</a></td>
+                <td style="padding:8px;">${t.status}</td>
+                <td style="padding:8px;">${vBadge}</td>
+                <td style="padding:8px;color:var(--text-dim);">${escapeHtml(specs)}</td>
+                <td style="padding:8px;color:var(--text-dim);">${t.created_at || '—'}</td>
+              </tr>`;
+            }).join('')}
+          </table>`;
+      } catch (e) {
+        console.error('Failed to load tasks', e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Knowledge Base
+    // -----------------------------------------------------------------------
+
+    async function loadKnowledge() {
+      try {
+        const res = await fetch(`${API}/api/dashboard/knowledge`, { headers: authHeaders() });
+        const items = await res.json();
+        renderKnowledgeList(items);
+      } catch (e) {
+        console.error('Knowledge error', e);
+      }
+    }
+
+    function renderKnowledgeList(items) {
+      const el = document.getElementById('knowledge-list');
+      if (!items.length) {
+        el.innerHTML = '<p class="empty-msg">No knowledge entries yet. Add your first one!</p>';
+        return;
+      }
+      el.innerHTML = items.map(k => {
+        let tags = [];
+        try { tags = JSON.parse(k.tags); } catch(_) {}
+        return `<div class="knowledge-item">
+          <div class="title">${escapeHtml(k.title)}</div>
+          <div class="content">${escapeHtml(k.content)}</div>
+          <div class="meta">
+            <span>${escapeHtml(k.category)}</span>
+            ${tags.length ? `<span>${tags.map(t => '#' + t).join(' ')}</span>` : ''}
+            <button class="delete-btn" onclick="deleteKnowledge(${k.id})">Delete</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function addKnowledge() {
+      const category = document.getElementById('kb-category').value.trim();
+      const title = document.getElementById('kb-title').value.trim();
+      const content = document.getElementById('kb-content').value.trim();
+      const tagsStr = document.getElementById('kb-tags').value.trim();
+
+      if (!category || !title || !content) {
+        alert('Fill in category, title, and content');
+        return;
+      }
+
+      const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+      try {
+        const res = await fetch(`${API}/api/dashboard/knowledge`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ category, title, content, tags }),
+        });
+        if (!res.ok) throw new Error('Failed to add');
+        // Clear form
+        document.getElementById('kb-category').value = '';
+        document.getElementById('kb-title').value = '';
+        document.getElementById('kb-content').value = '';
+        document.getElementById('kb-tags').value = '';
+        loadKnowledge();
+      } catch (e) {
+        alert('Error adding knowledge: ' + e.message);
+      }
+    }
+
+    async function deleteKnowledge(id) {
+      if (!confirm('Delete this entry?')) return;
+      try {
+        await fetch(`${API}/api/dashboard/knowledge/${id}`, {
+          method: 'DELETE', headers: authHeaders(),
+        });
+        loadKnowledge();
+      } catch (e) {
+        console.error('Delete error', e);
+      }
+    }
+
+    let searchTimeout = null;
+    function searchKnowledge() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(async () => {
+        const q = document.getElementById('kb-search').value.trim();
+        try {
+          const url = q
+            ? `${API}/api/dashboard/knowledge?query=${encodeURIComponent(q)}`
+            : `${API}/api/dashboard/knowledge`;
+          const res = await fetch(url, { headers: authHeaders() });
+          const items = await res.json();
+          renderKnowledgeList(items);
+        } catch (e) {
+          console.error('Search error', e);
+        }
+      }, 300);
+    }
+
+    // -----------------------------------------------------------------------
+    // Custom Agents
+    // -----------------------------------------------------------------------
+
+    async function loadAgents() {
+      try {
+        const res = await fetch(`${API}/api/dashboard/agents`, { headers: authHeaders() });
+        const agents = await res.json();
+        const el = document.getElementById('agents-list');
+        if (!agents.length) {
+          el.innerHTML = '<p class="empty-msg">No custom agents yet. Create your first specialist!</p>';
+          return;
+        }
+        el.innerHTML = agents.map(a => {
+          const caps = Array.isArray(a.capabilities) ? a.capabilities : [];
+          return `<div class="agent-item">
+            <div class="header">
+              <div>
+                <span class="name">${escapeHtml(a.name)}</span>
+                <span class="role" style="margin-left:8px;">${escapeHtml(a.role)}</span>
+              </div>
+              <button class="delete-btn" onclick="deleteAgent('${escapeHtml(a.id)}')">Delete</button>
+            </div>
+            <div class="desc">${escapeHtml(a.description)}</div>
+            ${caps.length ? `<div style="margin-top:6px;font-size:11px;color:var(--text-dim);">Capabilities: ${caps.join(', ')}</div>` : ''}
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Agents error', e);
+      }
+    }
+
+    async function createAgent() {
+      const id = document.getElementById('ca-id').value.trim().toLowerCase().replace(/\s+/g, '-');
+      const name = document.getElementById('ca-name').value.trim();
+      const role = document.getElementById('ca-role').value.trim();
+      const description = document.getElementById('ca-desc').value.trim();
+      const capsStr = document.getElementById('ca-caps').value.trim();
+      const systemPrompt = document.getElementById('ca-prompt').value.trim();
+
+      if (!id || !name || !role || !systemPrompt) {
+        alert('Fill in ID, name, role, and system prompt');
+        return;
+      }
+
+      const capabilities = capsStr ? capsStr.split(',').map(c => c.trim()).filter(Boolean) : [];
+
+      try {
+        const res = await fetch(`${API}/api/dashboard/agents`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ id, name, role, description, capabilities, system_prompt: systemPrompt }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Failed' }));
+          throw new Error(err.detail || 'Failed');
+        }
+        // Clear form
+        ['ca-id', 'ca-name', 'ca-role', 'ca-desc', 'ca-caps', 'ca-prompt'].forEach(
+          el => document.getElementById(el).value = ''
+        );
+        loadAgents();
+      } catch (e) {
+        alert('Error creating agent: ' + e.message);
+      }
+    }
+
+    async function deleteAgent(id) {
+      if (!confirm(`Delete agent "${id}"?`)) return;
+      try {
+        await fetch(`${API}/api/dashboard/agents/${id}`, {
+          method: 'DELETE', headers: authHeaders(),
+        });
+        loadAgents();
+      } catch (e) {
+        console.error('Delete error', e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Learned Patterns
+    // -----------------------------------------------------------------------
+
+    async function loadPatterns() {
+      try {
+        const res = await fetch(`${API}/api/dashboard/patterns`, { headers: authHeaders() });
+        const patterns = await res.json();
+        const el = document.getElementById('patterns-list');
+        if (!patterns.length) {
+          el.innerHTML = '<p class="empty-msg">No patterns learned yet. Run more analyses and the system will learn your preferences.</p>';
+          return;
+        }
+        el.innerHTML = patterns.map(p =>
+          `<div class="pattern-item">
+            <span class="freq">${p.frequency}</span>
+            <span class="type-badge">${escapeHtml(p.pattern_type)}</span>
+            <span style="flex:1;">${escapeHtml(p.pattern)}</span>
+            <span style="color:var(--text-dim);font-size:10px;">${p.last_seen || ''}</span>
+          </div>`
+        ).join('');
+      } catch (e) {
+        console.error('Patterns error', e);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Init
+    // -----------------------------------------------------------------------
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadAnalytics();
+      loadRecentTasks();
+    });
+  </script>
+</body>
+</html>

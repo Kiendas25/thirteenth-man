@@ -7,7 +7,7 @@ import traceback
 from datetime import datetime, timezone
 
 import markdown
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
@@ -20,6 +20,18 @@ from app.auth import (
     authenticate_user,
     get_current_user,
     register_user,
+)
+from app.knowledge_base import (
+    add_knowledge,
+    delete_custom_agent,
+    delete_knowledge,
+    get_analytics_summary,
+    get_custom_agents,
+    get_knowledge,
+    get_patterns,
+    log_analytics,
+    record_pattern,
+    save_custom_agent,
 )
 from app.models import MemoryEntry, TaskRequest
 from app.trust.approval import decide, list_pending, submit_approval
@@ -89,6 +101,19 @@ async def create_task(req: TaskRequest, user: str | None = Depends(get_current_u
         summary=req.content[:200],
         tags=response.specialists_used,
     ))
+
+    # Log analytics + learn patterns
+    username = user or "default"
+    await log_analytics("task_completed", {
+        "task_id": response.task_id,
+        "specialists": response.specialists_used,
+        "verified": response.verification.passed if response.verification else None,
+    }, username)
+    for spec in response.specialists_used:
+        await record_pattern(username, "specialist_usage", spec)
+    if response.verification and not response.verification.passed:
+        for issue in response.verification.issues[:3]:
+            await record_pattern(username, "common_issue", issue[:100])
 
     # Queue approval if needed
     if response.approval:
@@ -474,3 +499,204 @@ async def get_certificate(req: AuditRequest):
         media_type="text/html",
         headers={"Content-Disposition": f'attachment; filename="13thman-certificate-{req.product_name}.html"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard endpoints — Analytics, Knowledge, Custom Agents, Patterns
+# ---------------------------------------------------------------------------
+
+@router.get("/api/dashboard/analytics")
+async def dashboard_analytics(user: str | None = Depends(get_current_user)):
+    """Get analytics summary for the dashboard."""
+    return await get_analytics_summary(user)
+
+
+class KnowledgeCreate(BaseModel):
+    category: str
+    title: str
+    content: str
+    tags: list[str] = []
+
+
+@router.get("/api/dashboard/knowledge")
+async def dashboard_get_knowledge(
+    query: str | None = None,
+    category: str | None = None,
+    user: str | None = Depends(get_current_user),
+):
+    """Get knowledge entries."""
+    return await get_knowledge(user or "default", category=category, query=query)
+
+
+@router.post("/api/dashboard/knowledge")
+async def dashboard_add_knowledge(
+    data: KnowledgeCreate,
+    user: str | None = Depends(get_current_user),
+):
+    """Add a knowledge entry."""
+    return await add_knowledge(
+        username=user or "default",
+        category=data.category,
+        title=data.title,
+        content=data.content,
+        tags=data.tags,
+    )
+
+
+@router.delete("/api/dashboard/knowledge/{entry_id}")
+async def dashboard_delete_knowledge(
+    entry_id: int,
+    user: str | None = Depends(get_current_user),
+):
+    """Delete a knowledge entry."""
+    ok = await delete_knowledge(entry_id, user or "default")
+    if not ok:
+        raise HTTPException(404, "Entry not found")
+    return {"status": "deleted"}
+
+
+class CustomAgentCreate(BaseModel):
+    id: str
+    name: str
+    role: str
+    description: str = ""
+    capabilities: list[str] = []
+    system_prompt: str
+
+
+@router.get("/api/dashboard/agents")
+async def dashboard_get_agents(user: str | None = Depends(get_current_user)):
+    """Get custom agents."""
+    return await get_custom_agents(user or "default")
+
+
+@router.post("/api/dashboard/agents")
+async def dashboard_create_agent(
+    data: CustomAgentCreate,
+    user: str | None = Depends(get_current_user),
+):
+    """Create or update a custom agent."""
+    # Prevent overriding built-in agents
+    builtins = {
+        "coding", "research", "writing", "security", "financial",
+        "ml", "creativity", "auditing", "automation", "knowledge",
+    }
+    if data.id in builtins:
+        raise HTTPException(400, f"Cannot override built-in agent '{data.id}'")
+    return await save_custom_agent(
+        agent_id=data.id,
+        username=user or "default",
+        name=data.name,
+        role=data.role,
+        description=data.description,
+        capabilities=data.capabilities,
+        system_prompt=data.system_prompt,
+    )
+
+
+@router.delete("/api/dashboard/agents/{agent_id}")
+async def dashboard_delete_agent(
+    agent_id: str,
+    user: str | None = Depends(get_current_user),
+):
+    """Delete a custom agent."""
+    ok = await delete_custom_agent(agent_id, user or "default")
+    if not ok:
+        raise HTTPException(404, "Agent not found")
+    return {"status": "deleted"}
+
+
+@router.get("/api/dashboard/patterns")
+async def dashboard_get_patterns(
+    pattern_type: str | None = None,
+    user: str | None = Depends(get_current_user),
+):
+    """Get learned patterns."""
+    return await get_patterns(user or "default", pattern_type=pattern_type)
+
+
+# ---------------------------------------------------------------------------
+# GitHub Webhook endpoint
+# ---------------------------------------------------------------------------
+
+@router.post("/api/github/webhook")
+async def github_webhook(request: Request):
+    """Handle GitHub webhook events (push, pull_request)."""
+    from app.github_integration import verify_webhook_signature
+
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+
+    from app.config import settings as cfg
+    if cfg.github_webhook_secret and signature:
+        if not verify_webhook_signature(body, signature):
+            return JSONResponse(status_code=403, content={"detail": "Invalid signature"})
+
+    import json as _json
+    try:
+        payload = _json.loads(body)
+    except _json.JSONDecodeError:
+        return JSONResponse(status_code=400, content={"detail": "Invalid JSON"})
+
+    event = request.headers.get("X-GitHub-Event", "")
+    action = payload.get("action", "")
+
+    # Handle pull_request opened/synchronize
+    if event == "pull_request" and action in ("opened", "synchronize"):
+        pr = payload.get("pull_request", {})
+        repo = payload.get("repository", {})
+        owner = repo.get("owner", {}).get("login", "")
+        repo_name = repo.get("name", "")
+        pr_number = pr.get("number", 0)
+
+        if owner and repo_name and pr_number:
+            from app.github_integration import fetch_pr_diff, fetch_pr_files, post_pr_comment
+
+            try:
+                diff = await fetch_pr_diff(owner, repo_name, pr_number)
+                files = await fetch_pr_files(owner, repo_name, pr_number)
+
+                file_summary = "\n".join(
+                    f"  {f['filename']} (+{f['additions']}/-{f['deletions']})" for f in files
+                )
+                content = (
+                    f"Review this Pull Request: {owner}/{repo_name}#{pr_number}\n\n"
+                    f"Changed files:\n{file_summary}\n\n"
+                    f"Diff:\n```diff\n{diff[:8000]}\n```\n\n"
+                    f"Perform a thorough code review."
+                )
+
+                task_req = TaskRequest(content=content)
+                response = await orchestrator.process(task_req)
+                log_trace(response)
+                await save_task(response)
+
+                # Post review comment
+                if response.final_answer:
+                    verdict = ""
+                    if response.verification:
+                        v = response.verification
+                        verdict = (
+                            f"\n\n### 13th Man Verification\n"
+                            f"**Verdict:** {'PASSED' if v.passed else 'FAILED'} | "
+                            f"**Risk:** {v.risk_level}\n\n"
+                            f"{v.reasoning}\n"
+                        )
+                        if v.issues:
+                            verdict += "\n**Issues:**\n" + "\n".join(f"- {i}" for i in v.issues)
+
+                    comment = (
+                        f"## 13th Man Automated Code Review\n\n"
+                        f"{response.final_answer[:4000]}"
+                        f"{verdict}\n\n"
+                        f"---\n*Automated review triggered by webhook — [13th Man](https://github.com)*"
+                    )
+                    await post_pr_comment(owner, repo_name, pr_number, comment)
+
+                log.info("Webhook: reviewed PR %s/%s#%d", owner, repo_name, pr_number)
+            except Exception as exc:
+                log.error("Webhook PR review failed: %s", exc)
+
+        return {"status": "processed", "event": event, "action": action}
+
+    return {"status": "ignored", "event": event, "action": action}

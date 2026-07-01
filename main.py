@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import router
 from app.auth import init_auth_db
 from app.config import settings
+from app.knowledge_base import init_knowledge_db
 from app.rate_limiter import RateLimiter
 from app.trust.memory import init_db
 
@@ -29,6 +30,7 @@ logging.basicConfig(
 async def lifespan(application: FastAPI):
     await init_db()
     await init_auth_db()
+    await init_knowledge_db()
     yield
 
 
@@ -39,7 +41,7 @@ app = FastAPI(
         "Jarvis orchestrates specialist agents and the 13th Man challenges "
         "every conclusion before it reaches you."
     ),
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -60,6 +62,12 @@ async def landing():
 async def app_page():
     """Main application."""
     return FileResponse("app/static/index.html")
+
+
+@app.get("/dashboard")
+async def dashboard_page():
+    """Analytics dashboard."""
+    return FileResponse("app/static/dashboard.html")
 
 
 if __name__ == "__main__":

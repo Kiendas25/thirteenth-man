@@ -78,6 +78,17 @@ class Orchestrator:
             f"- {s.id}: {s.name} — {s.description}"
             for s in list_specialists()
         )
+
+        # Include custom agents if available
+        try:
+            from app.custom_agent import load_custom_agents
+            custom = await load_custom_agents()
+            for agent in custom.values():
+                specialists_info += f"\n- {agent.id}: {agent.name} — {agent.description}"
+            self._custom_agents = custom
+        except Exception:
+            self._custom_agents = {}
+
         system = ROUTING_SYSTEM.format(specialists=specialists_info)
         user_msg = f"User request: {task.content}"
         if task.context:
@@ -87,16 +98,20 @@ class Orchestrator:
         data = await chat_json(system, user_msg)
         elapsed = int((time.monotonic() - t0) * 1000)
 
+        # Build set of valid agent IDs (builtin + custom)
+        valid_ids = {
+            "coding", "research", "writing", "security", "financial",
+            "ml", "creativity", "auditing", "automation", "knowledge",
+        }
+        valid_ids.update(self._custom_agents.keys())
+
         # Normalise specialists list (local models may return dicts or strings)
         raw_specs = data.get("specialists", [])
         specs: list[str] = []
         if isinstance(raw_specs, list):
             for s in raw_specs:
                 sid = s.get("id", s) if isinstance(s, dict) else str(s)
-                if sid in {
-                    "coding", "research", "writing", "security", "financial",
-                    "ml", "creativity", "auditing", "automation", "knowledge",
-                }:
+                if sid in valid_ids:
                     specs.append(sid)
         if not specs:
             specs = ["research", "writing"]  # safe fallback
@@ -129,7 +144,12 @@ class Orchestrator:
     ) -> tuple[list[SpecialistResult], list[TraceEntry]]:
         """Run selected specialists in parallel."""
         async def _run_one(agent_id: str):
-            agent = get_specialist(agent_id)
+            # Try built-in first, fall back to custom
+            custom = getattr(self, "_custom_agents", {})
+            if agent_id in custom:
+                agent = custom[agent_id]
+            else:
+                agent = get_specialist(agent_id)
             return await agent.execute(task, context)
 
         tasks = [_run_one(sid) for sid in specialists]
