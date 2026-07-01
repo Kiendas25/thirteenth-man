@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     require_human_approval: bool = True
     log_level: str = "INFO"
     db_path: str = "thirteenth_man.db"
+    # GitHub integration
+    github_token: str = ""
+    github_webhook_secret: str = ""
+    # Rate limiting
+    rate_limit_per_minute: int = 10
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

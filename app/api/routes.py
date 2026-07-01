@@ -302,4 +302,175 @@ async def get_settings():
         "llm_model": settings.llm_model,
         "ollama_base_url": settings.ollama_base_url,
         "require_human_approval": settings.require_human_approval,
+        "github_connected": bool(settings.github_token),
     }
+
+
+# ---------------------------------------------------------------------------
+# GitHub integration endpoints
+# ---------------------------------------------------------------------------
+
+class GitHubRepoRequest(BaseModel):
+    owner: str
+    repo: str
+    ref: str = "main"
+
+
+class GitHubPRRequest(BaseModel):
+    owner: str
+    repo: str
+    pr_number: int
+    post_comment: bool = False
+
+
+@router.post("/api/github/analyse-repo")
+async def analyse_github_repo(req: GitHubRepoRequest):
+    """Analyse a GitHub repository."""
+    from app.github_integration import fetch_repo_code_files, fetch_repo_info
+
+    try:
+        info = await fetch_repo_info(req.owner, req.repo)
+        files = await fetch_repo_code_files(req.owner, req.repo, req.ref)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"detail": f"GitHub error: {exc}"})
+
+    # Build content for analysis
+    code_summary = []
+    for f in files:
+        code_summary.append(f"--- {f['path']} ---\n{f['content'][:3000]}")
+
+    content = (
+        f"Analyse this GitHub repository: {req.owner}/{req.repo}\n"
+        f"Description: {info.get('description', 'N/A')}\n"
+        f"Language: {info.get('language', 'N/A')}\n"
+        f"Stars: {info.get('stargazers_count', 0)}\n\n"
+        f"Code files to review:\n\n" + "\n\n".join(code_summary)
+    )
+
+    task_req = TaskRequest(content=content)
+    try:
+        response = await orchestrator.process(task_req)
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+    log_trace(response)
+    await save_task(response)
+    await save_memory(MemoryEntry(
+        task_id=response.task_id,
+        summary=f"GitHub repo analysis: {req.owner}/{req.repo}",
+        tags=response.specialists_used,
+    ))
+    if response.approval:
+        submit_approval(response.approval)
+
+    return response
+
+
+@router.post("/api/github/analyse-pr")
+async def analyse_github_pr(req: GitHubPRRequest):
+    """Analyse a GitHub pull request."""
+    from app.github_integration import fetch_pr_diff, fetch_pr_files, post_pr_comment
+
+    try:
+        diff = await fetch_pr_diff(req.owner, req.repo, req.pr_number)
+        files = await fetch_pr_files(req.owner, req.repo, req.pr_number)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"detail": f"GitHub error: {exc}"})
+
+    file_summary = "\n".join(
+        f"  {f['filename']} (+{f['additions']}/-{f['deletions']})" for f in files
+    )
+    content = (
+        f"Review this Pull Request: {req.owner}/{req.repo}#{req.pr_number}\n\n"
+        f"Changed files:\n{file_summary}\n\n"
+        f"Diff:\n```diff\n{diff[:8000]}\n```\n\n"
+        f"Perform a thorough code review. Find bugs, security issues, "
+        f"performance problems, and suggest improvements."
+    )
+
+    task_req = TaskRequest(content=content)
+    try:
+        response = await orchestrator.process(task_req)
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+    log_trace(response)
+    await save_task(response)
+    await save_memory(MemoryEntry(
+        task_id=response.task_id,
+        summary=f"PR review: {req.owner}/{req.repo}#{req.pr_number}",
+        tags=response.specialists_used,
+    ))
+
+    # Post comment on PR if requested
+    if req.post_comment and response.final_answer:
+        verdict = ""
+        if response.verification:
+            v = response.verification
+            verdict = (
+                f"\n\n### 13th Man Verification\n"
+                f"**Verdict:** {'PASSED' if v.passed else 'FAILED'} | "
+                f"**Risk:** {v.risk_level}\n\n"
+                f"{v.reasoning}\n"
+            )
+            if v.issues:
+                verdict += "\n**Issues:**\n" + "\n".join(f"- {i}" for i in v.issues)
+
+        comment_body = (
+            f"## 13th Man Code Review\n\n"
+            f"{response.final_answer[:4000]}"
+            f"{verdict}\n\n"
+            f"---\n*Automated review by [13th Man](https://github.com) — "
+            f"Multi-Agent Cognitive OS*"
+        )
+        try:
+            await post_pr_comment(req.owner, req.repo, req.pr_number, comment_body)
+        except Exception as exc:
+            log.warning("Failed to post PR comment: %s", exc)
+
+    if response.approval:
+        submit_approval(response.approval)
+
+    return response
+
+
+# ---------------------------------------------------------------------------
+# AI Auditor endpoints
+# ---------------------------------------------------------------------------
+
+class AuditRequest(BaseModel):
+    description: str
+    ai_output: str | None = None
+    product_name: str = "AI System"
+
+
+@router.post("/api/audit")
+async def run_audit(req: AuditRequest):
+    """Run an EU AI Act compliance audit."""
+    from app.ai_auditor import run_ai_audit
+
+    try:
+        result = await run_ai_audit(req.description, req.ai_output)
+    except Exception as exc:
+        log.error("Audit failed: %s", exc)
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return result
+
+
+@router.post("/api/audit/certificate")
+async def get_certificate(req: AuditRequest):
+    """Run audit and return an HTML certification page."""
+    from app.ai_auditor import generate_certification_html, run_ai_audit
+
+    try:
+        result = await run_ai_audit(req.description, req.ai_output)
+        html = generate_certification_html(result, req.product_name)
+    except Exception as exc:
+        log.error("Audit failed: %s", exc)
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+    return PlainTextResponse(
+        content=html,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="13thman-certificate-{req.product_name}.html"'},
+    )

@@ -55,6 +55,8 @@
       <div class="input-tabs">
         <button class="tab active" onclick="setInputMode('text')" id="tab-text">Text Query</button>
         <button class="tab" onclick="setInputMode('code')" id="tab-code">Code Review</button>
+        <button class="tab" onclick="setInputMode('github')" id="tab-github">GitHub</button>
+        <button class="tab" onclick="setInputMode('audit')" id="tab-audit">AI Audit</button>
       </div>
 
       <div class="input-area">
@@ -75,6 +77,24 @@
             <option value="solidity">Solidity</option>
           </select>
           <textarea id="code-input" class="code-textarea" placeholder="Paste your code here for analysis..."></textarea>
+        </div>
+        <div id="github-input-area" style="display:none;">
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="text" id="gh-owner" placeholder="Owner (e.g. facebook)" style="flex:1;">
+            <input type="text" id="gh-repo" placeholder="Repo (e.g. react)" style="flex:1;">
+            <input type="text" id="gh-ref" placeholder="Branch (main)" value="main" style="width:100px;">
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="number" id="gh-pr" placeholder="PR # (optional)" style="width:120px;">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);">
+              <input type="checkbox" id="gh-comment"> Post review comment on PR
+            </label>
+          </div>
+        </div>
+        <div id="audit-input-area" style="display:none;">
+          <input type="text" id="audit-product-name" placeholder="Product / System Name" style="margin-bottom:8px;">
+          <textarea id="audit-description" class="code-textarea" placeholder="Describe the AI system to audit (what it does, how it processes data, what decisions it makes, who uses it)..." style="min-height:120px !important;"></textarea>
+          <textarea id="audit-output" placeholder="(Optional) Paste AI output to audit..." style="min-height:60px;margin-top:8px;"></textarea>
         </div>
         <button id="submit-btn" onclick="submitTask()">Send</button>
       </div>

@@ -126,14 +126,23 @@ function authHeaders() {
 
 function setInputMode(mode) {
   inputMode = mode;
-  document.getElementById('tab-text').classList.toggle('active', mode === 'text');
-  document.getElementById('tab-code').classList.toggle('active', mode === 'code');
-  document.getElementById('code-input-area').style.display =
-    mode === 'code' ? 'flex' : 'none';
-  document.getElementById('task-input').placeholder =
-    mode === 'code'
-      ? 'Describe what to analyse in this code (or leave blank for full review)...'
-      : 'Describe your task... Jarvis will route it to the right specialists and the 13th Man will verify the result.';
+  ['text', 'code', 'github', 'audit'].forEach(m => {
+    const tab = document.getElementById(`tab-${m}`);
+    if (tab) tab.classList.toggle('active', mode === m);
+  });
+  document.getElementById('code-input-area').style.display = mode === 'code' ? 'flex' : 'none';
+  document.getElementById('github-input-area').style.display = mode === 'github' ? 'flex' : 'none';
+  document.getElementById('audit-input-area').style.display = mode === 'audit' ? 'flex' : 'none';
+
+  const taskInput = document.getElementById('task-input');
+  const placeholders = {
+    text: 'Describe your task... Jarvis will route it to the right specialists and the 13th Man will verify the result.',
+    code: 'Describe what to analyse in this code (or leave blank for full review)...',
+    github: 'Additional instructions for the repo/PR analysis (optional)...',
+    audit: '',
+  };
+  taskInput.placeholder = placeholders[mode] || placeholders.text;
+  taskInput.style.display = mode === 'audit' ? 'none' : 'block';
 }
 
 // -------------------------------------------------------------------------
@@ -244,6 +253,78 @@ async function submitTask() {
   const input = document.getElementById('task-input');
   const btn = document.getElementById('submit-btn');
   let content = input.value.trim();
+
+  // GitHub mode
+  if (inputMode === 'github') {
+    const owner = document.getElementById('gh-owner').value.trim();
+    const repo = document.getElementById('gh-repo').value.trim();
+    const ref = document.getElementById('gh-ref').value.trim() || 'main';
+    const prNum = document.getElementById('gh-pr').value.trim();
+    const postComment = document.getElementById('gh-comment').checked;
+
+    if (!owner || !repo) { alert('Enter owner and repo name'); return; }
+
+    btn.disabled = true;
+    const responseArea = document.getElementById('response-area');
+    responseArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>${prNum ? 'Analysing PR #' + prNum : 'Analysing repository'}...</span></div>`;
+
+    try {
+      let url, body;
+      if (prNum) {
+        url = `${API}/api/github/analyse-pr`;
+        body = { owner, repo, pr_number: parseInt(prNum), post_comment: postComment };
+      } else {
+        url = `${API}/api/github/analyse-repo`;
+        body = { owner, repo, ref };
+      }
+      const res = await fetch(url, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(err.detail || 'Request failed');
+      }
+      const data = await res.json();
+      currentTaskId = data.task_id;
+      renderResponse(data);
+      renderVerification(data.verification);
+      renderTrace(data.trace);
+      renderApprovals(data.approval);
+      highlightAgents(data.specialists_used);
+      loadHistory();
+      showExportSection();
+    } catch (err) {
+      responseArea.innerHTML = `<div class="response-card"><h3 style="color:var(--red);">Error</h3><p class="answer">${escapeHtml(err.message)}</p></div>`;
+    } finally { btn.disabled = false; }
+    return;
+  }
+
+  // AI Audit mode
+  if (inputMode === 'audit') {
+    const productName = document.getElementById('audit-product-name').value.trim() || 'AI System';
+    const description = document.getElementById('audit-description').value.trim();
+    const aiOutput = document.getElementById('audit-output').value.trim();
+
+    if (!description) { alert('Describe the AI system to audit'); return; }
+
+    btn.disabled = true;
+    const responseArea = document.getElementById('response-area');
+    responseArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Running EU AI Act compliance audit...</span></div>`;
+
+    try {
+      const res = await fetch(`${API}/api/audit`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ description, ai_output: aiOutput || null, product_name: productName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(err.detail || 'Audit failed');
+      }
+      const data = await res.json();
+      renderAuditResult(data, productName);
+    } catch (err) {
+      responseArea.innerHTML = `<div class="response-card"><h3 style="color:var(--red);">Error</h3><p class="answer">${escapeHtml(err.message)}</p></div>`;
+    } finally { btn.disabled = false; }
+    return;
+  }
 
   // Code review mode
   if (inputMode === 'code') {
@@ -529,4 +610,107 @@ function escapeHtml(text) {
   const d = document.createElement('div');
   d.textContent = text;
   return d.innerHTML;
+}
+
+// -------------------------------------------------------------------------
+// Audit result renderer
+// -------------------------------------------------------------------------
+
+function renderAuditResult(data, productName) {
+  const responseArea = document.getElementById('response-area');
+  const scoreColor = data.score >= 80 ? 'var(--green)' : data.score >= 50 ? 'var(--orange)' : 'var(--red)';
+  const complianceClass = data.overall_compliance === 'compliant' ? 'passed' : data.overall_compliance === 'non_compliant' ? 'failed' : 'pending';
+
+  let findingsHtml = '';
+  if (data.findings && data.findings.length) {
+    findingsHtml = `
+      <table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:12px;">
+        <tr style="background:var(--surface-2);">
+          <th style="padding:8px;text-align:left;border:1px solid var(--border);">Check</th>
+          <th style="padding:8px;text-align:left;border:1px solid var(--border);">Status</th>
+          <th style="padding:8px;text-align:left;border:1px solid var(--border);">Evidence</th>
+          <th style="padding:8px;text-align:left;border:1px solid var(--border);">Action</th>
+        </tr>
+        ${data.findings.map(f => {
+          const statusColor = f.status === 'pass' ? 'var(--green)' : f.status === 'fail' ? 'var(--red)' : 'var(--orange)';
+          return `<tr>
+            <td style="padding:6px 8px;border:1px solid var(--border);">${escapeHtml(f.checklist_id)}</td>
+            <td style="padding:6px 8px;border:1px solid var(--border);color:${statusColor};font-weight:600;">${f.status.toUpperCase()}</td>
+            <td style="padding:6px 8px;border:1px solid var(--border);color:var(--text-dim);">${escapeHtml(f.evidence)}</td>
+            <td style="padding:6px 8px;border:1px solid var(--border);color:var(--text-dim);">${escapeHtml(f.recommendation)}</td>
+          </tr>`;
+        }).join('')}
+      </table>`;
+  }
+
+  let criticalHtml = '';
+  if (data.critical_issues && data.critical_issues.length) {
+    criticalHtml = `
+      <div style="margin-top:16px;">
+        <h3 style="color:var(--red);font-size:13px;">Critical Issues</h3>
+        <ul style="margin:8px 0 0 16px;">${data.critical_issues.map(i => `<li style="color:var(--red);font-size:12px;margin-bottom:4px;">${escapeHtml(i)}</li>`).join('')}</ul>
+      </div>`;
+  }
+
+  let stepsHtml = '';
+  if (data.next_steps && data.next_steps.length) {
+    stepsHtml = `
+      <div style="margin-top:16px;">
+        <h3 style="font-size:13px;">Next Steps</h3>
+        <ol style="margin:8px 0 0 16px;">${data.next_steps.map(s => `<li style="font-size:12px;margin-bottom:4px;color:var(--text-dim);">${escapeHtml(s)}</li>`).join('')}</ol>
+      </div>`;
+  }
+
+  responseArea.innerHTML = `
+    <div class="response-card">
+      <h3>EU AI Act Compliance Audit — ${escapeHtml(productName)}</h3>
+
+      <div style="display:flex;gap:24px;align-items:center;margin:16px 0;padding:16px;background:var(--surface-2);border-radius:8px;">
+        <div style="text-align:center;">
+          <div style="font-size:48px;font-weight:800;color:${scoreColor};">${data.score}</div>
+          <div style="font-size:11px;color:var(--text-dim);">/ 100</div>
+        </div>
+        <div>
+          <div style="margin-bottom:4px;"><span class="badge ${complianceClass}">${data.overall_compliance.replace(/_/g, ' ').toUpperCase()}</span></div>
+          <div style="font-size:12px;color:var(--text-dim);">Risk Classification: <strong style="color:var(--text);">${data.risk_classification.toUpperCase()}</strong></div>
+        </div>
+      </div>
+
+      <div class="answer">${simpleMarkdown(data.summary)}</div>
+
+      ${findingsHtml}
+      ${criticalHtml}
+      ${stepsHtml}
+
+      <div style="margin-top:16px;">
+        <button class="btn-export" onclick="downloadCertificate('${escapeHtml(productName)}')">Download Certificate</button>
+      </div>
+    </div>
+  `;
+
+  // Hide normal verification/trace for audit results
+  document.getElementById('verification-panel').innerHTML = '<p style="font-size:12px;color:var(--text-dim);">Audit mode — see main panel</p>';
+  document.getElementById('trace-panel').innerHTML = '<p style="font-size:12px;color:var(--text-dim);">Audit mode</p>';
+}
+
+async function downloadCertificate(productName) {
+  const description = document.getElementById('audit-description').value.trim();
+  const aiOutput = document.getElementById('audit-output').value.trim();
+  try {
+    const res = await fetch(`${API}/api/audit/certificate`, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ description, ai_output: aiOutput || null, product_name: productName }),
+    });
+    if (!res.ok) throw new Error('Failed to generate certificate');
+    const html = await res.text();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `13thman-certificate-${productName}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Error generating certificate: ' + err.message);
+  }
 }

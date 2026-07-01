@@ -603,6 +603,40 @@ header .subtitle {
 }
 .answer pre code { background: none; padding: 0; }
 
+/* GitHub & Audit input areas */
+#github-input-area, #audit-input-area {
+  flex: 1;
+  flex-direction: column;
+}
+
+#github-input-area input, #audit-input-area input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+#github-input-area input:focus, #audit-input-area input:focus {
+  border-color: var(--accent);
+}
+
+#audit-input-area textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+
+#audit-input-area textarea:focus { border-color: var(--accent); }
+
 /* Responsive */
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }

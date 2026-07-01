@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import router
 from app.auth import init_auth_db
 from app.config import settings
+from app.rate_limiter import RateLimiter
 from app.trust.memory import init_db
 
 logging.basicConfig(
@@ -38,16 +39,26 @@ app = FastAPI(
         "Jarvis orchestrates specialist agents and the 13th Man challenges "
         "every conclusion before it reaches you."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
+
+# Rate limiting middleware
+app.add_middleware(RateLimiter)
 
 app.include_router(router)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 @app.get("/")
-async def index():
+async def landing():
+    """Landing page."""
+    return FileResponse("app/static/landing.html")
+
+
+@app.get("/app")
+async def app_page():
+    """Main application."""
     return FileResponse("app/static/index.html")
 
 
