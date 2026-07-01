@@ -4,8 +4,11 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # LLM provider: "openai" or "ollama"
+    llm_provider: str = "ollama"
     openai_api_key: str = ""
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "llama3.1:8b"
+    ollama_base_url: str = "http://localhost:11434/v1"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     require_human_approval: bool = True
