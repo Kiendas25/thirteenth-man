@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from typing import Any
 
 from app.llm import chat_json
 from app.models import Severity, SpecialistResult, TraceEntry, VerificationResult
@@ -56,6 +57,30 @@ Rules:
 """
 
 
+def _to_str_list(items: Any) -> list[str]:
+    """Normalise a list that may contain dicts/objects into plain strings."""
+    if not isinstance(items, list):
+        return [str(items)] if items else []
+    result: list[str] = []
+    for item in items:
+        if isinstance(item, str):
+            result.append(item)
+        elif isinstance(item, dict):
+            # Local models sometimes return {"type": ..., "description": ...}
+            parts = [str(v) for v in item.values() if v]
+            result.append(" — ".join(parts))
+        else:
+            result.append(str(item))
+    return result
+
+
+def _safe_severity(val: Any) -> Severity:
+    """Parse a severity value, handling unexpected formats."""
+    if isinstance(val, str) and val.lower() in ("low", "medium", "high", "critical"):
+        return Severity(val.lower())
+    return Severity.low
+
+
 class ThirteenthMan:
     """Adversarial verification agent."""
 
@@ -79,11 +104,11 @@ class ThirteenthMan:
         elapsed = int((time.monotonic() - t0) * 1000)
 
         result = VerificationResult(
-            passed=data.get("passed", True),
-            issues=data.get("issues", []),
-            risk_level=Severity(data.get("risk_level", "low")),
-            recommendations=data.get("recommendations", []),
-            reasoning=data.get("reasoning", ""),
+            passed=bool(data.get("passed", True)),
+            issues=_to_str_list(data.get("issues", [])),
+            risk_level=_safe_severity(data.get("risk_level", "low")),
+            recommendations=_to_str_list(data.get("recommendations", [])),
+            reasoning=str(data.get("reasoning", "")),
         )
 
         trace = TraceEntry(

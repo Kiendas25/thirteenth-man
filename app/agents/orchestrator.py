@@ -87,11 +87,33 @@ class Orchestrator:
         data = await chat_json(system, user_msg)
         elapsed = int((time.monotonic() - t0) * 1000)
 
+        # Normalise specialists list (local models may return dicts or strings)
+        raw_specs = data.get("specialists", [])
+        specs: list[str] = []
+        if isinstance(raw_specs, list):
+            for s in raw_specs:
+                sid = s.get("id", s) if isinstance(s, dict) else str(s)
+                if sid in {
+                    "coding", "research", "writing", "security", "financial",
+                    "ml", "creativity", "auditing", "automation", "knowledge",
+                }:
+                    specs.append(sid)
+        if not specs:
+            specs = ["research", "writing"]  # safe fallback
+
+        raw_risk = data.get("risk_level", "low")
+        if isinstance(raw_risk, str) and raw_risk.lower() in (
+            "low", "medium", "high", "critical"
+        ):
+            risk = Severity(raw_risk.lower())
+        else:
+            risk = Severity.low
+
         decision = RoutingDecision(
-            specialists=data.get("specialists", []),
-            plan=data.get("plan", ""),
-            requires_approval=data.get("requires_approval", False),
-            risk_level=Severity(data.get("risk_level", "low")),
+            specialists=specs,
+            plan=str(data.get("plan", "")),
+            requires_approval=bool(data.get("requires_approval", False)),
+            risk_level=risk,
         )
         trace = TraceEntry(
             agent="Jarvis",
